@@ -5,7 +5,7 @@ from inxpect.msg import Radar
 
 def main():
     rospy.init_node("inxpect_reader_node")
-    
+
     # TODO: Do param
     # rospy.get_param("inxpect_devices=_ip")
     # rospy.get_param("hz")
@@ -13,7 +13,7 @@ def main():
 
     hz = 150
 
-    sensor_device = Inxpect(ip="192.168.1.10")
+    sensor_device = Inxpect(ip="192.168.1.10", lambda_=0.8)
 
     radar_publisher = rospy.Publisher("radar_data", Radar, queue_size=10)
     rate = rospy.Rate(hz)

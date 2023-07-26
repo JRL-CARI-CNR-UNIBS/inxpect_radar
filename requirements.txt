@@ -1,0 +1,6 @@
+numpy==1.17.4
+pymodbus==2.1.0
+rospy>=1.15.14
+rospy
+rospkg
+pyyaml

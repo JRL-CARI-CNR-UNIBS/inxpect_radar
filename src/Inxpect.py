@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 import numpy as np
 import ipaddress
+from scipy import signal
 
 REGISTER_ADDRESS = {"distance": 41014, "angle": 41015}
 N_SENSOR_DATA = 2
@@ -36,7 +37,10 @@ class Inxpect:
 
     state_obs_initialized: bool = field(default=False, init=False)
     sensor_data: np.array = field(default=None, init=False)
+    sensor_data_filtered: np.array = field(default=None, init=False)
     no_signal_samples: int = field(default=0, init=False)
+    filter_win_length: int = field(default=1000, init=True)
+    n_cycles: int = field(default=0, init=False)
 
     def __post_init__(self):
         try:
@@ -74,18 +78,33 @@ class Inxpect:
 
         sensor_data_new = np.array([distance, angle])
 
-        if not self.state_obs_initialized:
-            self.initialize_state_observer(sensor_data_new)
-        else:
-            # if distance < 0.1 and self.no_signal_samples < 300:
-            #     sensor_data_new = self.sensor_data
-            #     self.no_signal_samples += 1
-            # else:
-            #     self.no_signal_samples = 0
-            self.update_state_observer(sensor_data_new)
-            # self.first_order_filer(sensor_data_new)
+        self.n_cycles += 1
+        if self.n_cycles == 1:
+            self.sensor_data = np.reshape(sensor_data_new,(N_SENSOR_DATA,1))
+            self.sensor_data_filtered = self.sensor_data
+        else:          
+            if self.sensor_data.shape[1] < self.filter_win_length:
+                self.sensor_data = np.append(self.sensor_data,np.reshape(sensor_data_new,(N_SENSOR_DATA,1)), axis=1)
+                self.sensor_data_filtered = self.sensor_data
+            
+            else:
+                self.sensor_data[:,:-1] = self.sensor_data[:,1:]
+                self.sensor_data[:,-1] = sensor_data_new
+                self.moving_average_filter()
 
-        return self.sensor_data[0], self.sensor_data[1]
+        # if not self.state_obs_initialized:
+        #     self.initialize_state_observer(sensor_data_new)
+        # else:
+        #     # if distance < 0.1 and self.no_signal_samples < 300:
+        #     #     sensor_data_new = self.sensor_data
+        #     #     self.no_signal_samples += 1
+        #     # else:
+        #     #     self.no_signal_samples = 0
+        #     self.update_state_observer(sensor_data_new)
+        #     # self.first_order_filter(sensor_data_new)
+
+        return self.sensor_data_filtered[0,-1], self.sensor_data_filtered[1,-1]
+        
 
     def initialize_state_observer(self, sensor_data_new: np.array) -> None:
         self.sensor_data = sensor_data_new
@@ -94,5 +113,13 @@ class Inxpect:
     def update_state_observer(self, sensor_data_new: np.array):
         self.sensor_data = self.sensor_data + self.lambda_ * (sensor_data_new - self.sensor_data)
 
-    def first_order_filer(self, sensor_data_new: np.array):
+    def first_order_filter(self, sensor_data_new: np.array):
         self.sensor_data = self.lambda_ * self.sensor_data + (1 - self.lambda_) * sensor_data_new
+
+    def moving_average_filter(self):
+        b = (np.ones(self.filter_win_length))/self.filter_win_length #numerator co-effs of filter transfer function
+        a = np.ones(1)  #denominator co-effs of filter transfer function
+        
+        for i in range(0,N_SENSOR_DATA):
+            # self.sensor_data_filtered[i] = signal.convolve(self.sensor_data[i,:],b) #filter output using convolution
+            self.sensor_data_filtered[i] = signal.lfilter(b,a,self.sensor_data[i,:]) #filter output using lfilter function

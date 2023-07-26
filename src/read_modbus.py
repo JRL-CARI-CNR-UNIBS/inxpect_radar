@@ -2,7 +2,7 @@
 
 import rospy
 from Inxpect import Inxpect
-from inxpect.msg import Radar
+from inxpect_radar.msg import Radar
 
 
 def main():

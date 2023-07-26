@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+
+<launch>
+
+  <arg name="hz" default="100" />
+  <arg name="ip" default="192.168.1.10" />
+  <!-- <arg name="lambda" default="1" /> -->
+
+  <node name="inxpect_radar_acquisition" pkg="inxpect" type="read_modbus.py"  output="screen" >
+    <param name="hz" value="$(arg hz)" />
+    <param name="ip" value="$(arg ip)" />
+    <param name="lambda" value="$(arg lambda)" />
+  </node>
+
+</launch>

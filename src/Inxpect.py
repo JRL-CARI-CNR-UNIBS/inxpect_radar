@@ -36,6 +36,7 @@ class Inxpect:
 
     state_obs_initialized: bool = field(default=False, init=False)
     sensor_data: np.array = field(default=None, init=False)
+    no_signal_samples: int = field(default=0, init=False)
 
     def __post_init__(self):
         try:
@@ -76,6 +77,11 @@ class Inxpect:
         if not self.state_obs_initialized:
             self.initialize_state_observer(sensor_data_new)
         else:
+            # if distance < 0.1 and self.no_signal_samples < 300:
+            #     sensor_data_new = self.sensor_data
+            #     self.no_signal_samples += 1
+            # else:
+            #     self.no_signal_samples = 0
             self.update_state_observer(sensor_data_new)
             # self.first_order_filer(sensor_data_new)
 

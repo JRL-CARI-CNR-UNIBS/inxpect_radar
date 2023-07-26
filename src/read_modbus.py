@@ -11,7 +11,7 @@ def main():
     # rospy.get_param("hz")
     # radar_data
 
-    hz = 150
+    hz = 100
 
     sensor_device = Inxpect(ip="192.168.1.10", lambda_=0.8)
 

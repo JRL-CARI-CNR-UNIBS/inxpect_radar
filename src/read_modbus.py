@@ -21,11 +21,17 @@ def main():
     rate = rospy.Rate(hz)
 
     while not rospy.is_shutdown():
-        distance, angle = sensor_device.read()
+        distance, angle, \
+        distance_preproc, angle_preproc, \
+        distance_filtered, angle_filtered = sensor_device.read()
 
         data_msg = Radar()
         data_msg.distance = distance
         data_msg.angle = angle
+        data_msg.distance_preproc = distance_preproc
+        data_msg.angle_preproc = angle_preproc
+        data_msg.distance_filtered = distance_filtered
+        data_msg.angle_filtered = angle_filtered
 
         radar_publisher.publish(data_msg)
 

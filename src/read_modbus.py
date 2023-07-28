@@ -19,7 +19,8 @@ def main():
 
     # MODBUS fiels to be read
     modbus_fields = {"Radar1" : {"distance": 41014, "angle": 41015},
-                     "Radar2" : {"distance": 41022, "angle": 41023}}
+                     "Radar2" : {"distance": 41022, "angle": 41023},
+                     "Radar3" : {"distance": 41030, "angle": 41031}}
     
     # modbus_fields = {"Radar1" : {"distance": 41014, "angle": 41015},
     #                  "Radar2" : {"distance": 41022, "angle": 41023},
@@ -48,11 +49,11 @@ def main():
 
             data_msg = Radar()
             data_msg.distance = radar_network.state["Radar" + str(i+1)]["distance"]
-            data_msg.distance = radar_network.state["Radar" + str(i+1)]["angle"]
+            data_msg.angle = radar_network.state["Radar" + str(i+1)]["angle"]
             data_msg.distance_preproc = radar_network.state["Radar" + str(i+1)]["distance_preproc"]
-            data_msg.distance_preproc = radar_network.state["Radar" + str(i+1)]["distance_preproc"]
+            data_msg.angle_preproc = radar_network.state["Radar" + str(i+1)]["angle_preproc"]
             data_msg.distance_filtered = radar_network.state["Radar" + str(i+1)]["distance_filtered"]
-            data_msg.distance_filtered = radar_network.state["Radar" + str(i+1)]["distance_filtered"]
+            data_msg.angle_filtered = radar_network.state["Radar" + str(i+1)]["angle_filtered"]
 
             radar_publishers["Radar" + str(i+1) + "_pub"].publish(data_msg)
 

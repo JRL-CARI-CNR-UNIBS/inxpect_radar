@@ -37,15 +37,22 @@ class Inxpect:
     sensor_data_preproc: np.array = field(default=None, init=False)
     sensor_data_filtered: np.array = field(default=None, init=False)
     no_signal_samples: int = field(default=0, init=False)
-    filter_win_length: int = field(default=50, init=True) # window for moving-average filtering
+    filter_win_length: int = field(default=20, init=True) # window for moving-average filtering
     n_cycles: int = field(default=0, init=False)
-    ignore_win_length: int = field(default=50, init=True) # window for null outlier rejection
+    ignore_win_length: int = field(default=5, init=True) # window for null outlier rejection
     is_detecting: bool = field(default=False, init=True) # is the sensor detecting the human along the current window?
     time_old: float = field(default=0, init=False)
     rejection_time: float = field(default=0, init=False)
-    rejection_time_thresh: float = field(default=0.5, init=True) # threshold in seconds to ignore null samples
+    rejection_time_thresh: float = field(default=2.0, init=True) # threshold in seconds to ignore null samples
 
 
+    def __post_init__(self):
+        self.sensor_data = np.zeros((N_SENSOR_DATA,1), dtype=float)
+        self.sensor_data_preproc = np.zeros((N_SENSOR_DATA,1), dtype=float)
+        self.sensor_data_filtered = np.zeros((N_SENSOR_DATA,1), dtype=float)
+        self.time_old = time.time()
+
+    #TODO to be removed
     def read_windowed(self):
         print(self.name + " reading...")
         # Read raw data from MODBUS registers
@@ -122,41 +129,44 @@ class Inxpect:
         
 
     def read(self):
-        print(self.name + " reading...")
+        # print(self.name + " reading...")
         # Read raw data from MODBUS registers
         distance = self.read_raw_data("distance", "distance")
         angle = self.read_raw_data("angle", "angle")
-        sensor_data_new = np.array([distance, angle])
+        sensor_data_new = np.reshape(np.array([distance, angle]),(N_SENSOR_DATA,1))
 
-        # Save a window of samples, preprocess, and filter them
-        self.n_cycles += 1
-        if self.n_cycles == 1:
-            self.sensor_data_preproc = np.reshape(sensor_data_new,(N_SENSOR_DATA,1))
-            self.sensor_data_filtered = np.reshape(sensor_data_new,(N_SENSOR_DATA,1))
-            self.sensor_data_preproc = np.append(self.sensor_data_preproc,np.reshape(sensor_data_new,(N_SENSOR_DATA,1)), axis=1)
-            self.sensor_data_filtered = np.append(self.sensor_data_filtered,np.reshape(sensor_data_new,(N_SENSOR_DATA,1)), axis=1)
+        # Elapsed time from previous reading
+        dt = time.time() - self.time_old
+        self.time_old = time.time()
 
-        else:   
-            dt = time.time() - self.time_old
-            self.time_old = time.time()
-
-            if np.linalg.norm(sensor_data_new) < 1e-3:
-                if self.rejection_time < self.rejection_time_thresh:
-                    self.rejection_time += dt
-                    self.sensor_data_preproc = np.append(self.sensor_data_preproc,self.sensor_data_preproc[:,-1], axis=1)
-                else:
-                    self.sensor_data_preproc[:,-1] = np.zeros((N_SENSOR_DATA,),dtype=float)
+        print(self.name + ": " + str(self.rejection_time))
+        if np.linalg.norm(sensor_data_new) < 1e-3:
+            if self.rejection_time < self.rejection_time_thresh:
+                self.rejection_time += dt
+                self.sensor_data_preproc = np.append(self.sensor_data_preproc, \
+                                                        np.reshape(self.sensor_data_preproc[:,-1],(N_SENSOR_DATA,1)), axis=1)
+            
             else:
-                self.sensor_data_preproc[:,-1] = sensor_data_new
+                self.sensor_data_preproc = np.append(self.sensor_data_preproc, \
+                                                     np.zeros((N_SENSOR_DATA,1),dtype=float), axis=1)
+        else:
+            self.sensor_data_preproc = np.append(self.sensor_data_preproc,sensor_data_new, axis=1)
+            self.rejection_time = 0.0
 
-            # Slide window
-            if self.sensor_data_preproc.shape[1] >= self.filter_win_length:
-                self.sensor_data_preproc[:,:-1] = self.sensor_data_preproc[:,1:]
-                
+        # Slide window
+        if self.sensor_data_preproc.shape[1] >= self.filter_win_length:
             # Filter data using moving-average filter                   
-            self.moving_average_filter()
+            filtered_signal = self.moving_average_filter()
+            self.sensor_data_filtered = np.append(self.sensor_data_filtered,filtered_signal, axis=1)
+            
+            # Remove oldest value in sliding window
+            self.sensor_data_preproc = np.delete(self.sensor_data_preproc, 0, axis=1)   
+            self.sensor_data_filtered = np.delete(self.sensor_data_filtered, 0, axis=1)   
 
-        return sensor_data_new[0], sensor_data_new[1], \
+        else:
+            self.sensor_data_filtered = np.copy(self.sensor_data_preproc)
+            
+        return sensor_data_new[0][0], sensor_data_new[1][0], \
                self.sensor_data_preproc[0,-1], self.sensor_data_preproc[1,-1], \
                self.sensor_data_filtered[0,-1], self.sensor_data_filtered[1,-1]
 
@@ -192,9 +202,11 @@ class Inxpect:
         b = (np.ones(self.filter_win_length))/self.filter_win_length #numerator co-effs of filter transfer function
         a = np.ones(1)  #denominator co-effs of filter transfer function
         
+        filtered_signal = np.zeros((N_SENSOR_DATA,self.filter_win_length),dtype=float)
         for i in range(0,N_SENSOR_DATA):
-            self.sensor_data_filtered[i,-self.filter_win_length:] = \
-                signal.lfilter(b,a,self.sensor_data_preproc[i,-self.filter_win_length:]) # filter output using lfilter function
+            filtered_signal[i] = signal.lfilter(b,a,self.sensor_data_preproc[i,-self.filter_win_length:]) # filter output using lfilter function
+
+        return np.reshape(filtered_signal[:,-1],((N_SENSOR_DATA,1)))
 
 
     def human_detected(self, data):

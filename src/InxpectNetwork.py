@@ -35,11 +35,11 @@ class InxpectNetwork:
         for i in range(self.n_radars):
             distance, angle, \
             distance_preproc, angle_preproc, \
-            distance_filtered, angle_filtered = self.radars["Radar" + str(i+1)].read_windowed()
+            distance_filtered, angle_filtered = self.radars["Radar" + str(i+1)].read()
 
             self.state["Radar" + str(i+1)] = {"distance" : distance, "angle": angle, \
-                                            "distance_preproc" : distance_preproc, "angle_preproc": angle_preproc, \
-                                            "distance_filtered" : distance_filtered, "angle_filtered": angle_filtered}
+                                              "distance_preproc" : distance_preproc, "angle_preproc": angle_preproc, \
+                                              "distance_filtered" : distance_filtered, "angle_filtered": angle_filtered}
 
 
 

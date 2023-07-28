@@ -2,7 +2,7 @@
 
 <launch>
 
-  <arg name="hz" default="100" />
+  <arg name="hz" default="10" />
   <arg name="ip" default="192.168.1.10" />
   <arg name="lambda" default="1" />
 

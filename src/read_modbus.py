@@ -15,25 +15,33 @@ def main():
 
     hz = 100
 
-    sensor_device = Inxpect(ip="192.168.1.10", lambda_=0.8)
+    ip_adresses = ["192.168.1.10"]
+    radars = {}
+    radar_publishers = {}
 
-    radar_publisher = rospy.Publisher("radar_data", Radar, queue_size=10)
+    for i in range(len(ip_adresses)):
+        new_device = Inxpect(ip=ip_adresses[i], lambda_=0.8)
+        radars.update({"Radar" + str(i+1) : new_device})
+        radar_publishers.update({"Radar" + str(i+1) + "_pub" : \
+                                 rospy.Publisher("radar" + str(i+1) + "_data", Radar, queue_size=10)})
+    
     rate = rospy.Rate(hz)
-
     while not rospy.is_shutdown():
-        distance, angle, \
-        distance_preproc, angle_preproc, \
-        distance_filtered, angle_filtered = sensor_device.read()
 
-        data_msg = Radar()
-        data_msg.distance = distance
-        data_msg.angle = angle
-        data_msg.distance_preproc = distance_preproc
-        data_msg.angle_preproc = angle_preproc
-        data_msg.distance_filtered = distance_filtered
-        data_msg.angle_filtered = angle_filtered
+        for i in range(len(ip_adresses)):
+            distance, angle, \
+            distance_preproc, angle_preproc, \
+            distance_filtered, angle_filtered = radars["Radar" + str(i+1)].read_windowed()
 
-        radar_publisher.publish(data_msg)
+            data_msg = Radar()
+            data_msg.distance = distance
+            data_msg.angle = angle
+            data_msg.distance_preproc = distance_preproc
+            data_msg.angle_preproc = angle_preproc
+            data_msg.distance_filtered = distance_filtered
+            data_msg.angle_filtered = angle_filtered
+
+            radar_publishers["Radar" + str(i+1) + "_pub"].publish(data_msg)
 
         rate.sleep()
 

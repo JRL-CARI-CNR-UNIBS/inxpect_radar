@@ -5,6 +5,7 @@ from typing import Optional
 import numpy as np
 import ipaddress
 from scipy import signal
+import time
 
 REGISTER_ADDRESS = {"distance": 41014, "angle": 41015}
 N_SENSOR_DATA = 2
@@ -29,19 +30,21 @@ class RadarData:
 
 @dataclass
 class Inxpect:
-    ip: str
-    lambda_: Optional[float] = field(default=1, init=True)
+    ip: str 
+    lambda_: float = field(default=1, init=True)
     client: ModbusTcpClient = field(default=None, init=False)
     state_obs_initialized: bool = field(default=False, init=False)
     sensor_data: np.array = field(default=None, init=False)
     sensor_data_preproc: np.array = field(default=None, init=False)
     sensor_data_filtered: np.array = field(default=None, init=False)
     no_signal_samples: int = field(default=0, init=False)
-    filter_win_length: int = field(default=100, init=True) # window for moving-average filtering
+    filter_win_length: int = field(default=50, init=True) # window for moving-average filtering
     n_cycles: int = field(default=0, init=False)
     ignore_win_length: int = field(default=50, init=True) # window for null outlier rejection
     is_detecting: bool = field(default=False, init=True) # is the sensor detecting the human along the current window?
-
+    time_old: float = field(default=0, init=False)
+    rejection_time: float = field(default=0, init=False)
+    rejection_time_thresh: float = field(default=0.5, init=True) # threshold in seconds to ignore null samples
 
     def __post_init__(self):
         try:
@@ -58,7 +61,7 @@ class Inxpect:
             raise Exception(f"Unable to connect to: {self.ip}")
 
 
-    def read(self):
+    def read_windowed(self):
         # Read raw data from MODBUS registers
         distance = self.read_raw_data("distance", "distance")
         angle = self.read_raw_data("angle", "angle")
@@ -132,6 +135,45 @@ class Inxpect:
                self.sensor_data_filtered[0,-1], self.sensor_data_filtered[1,-1]
         
 
+    def read(self):
+        # Read raw data from MODBUS registers
+        distance = self.read_raw_data("distance", "distance")
+        angle = self.read_raw_data("angle", "angle")
+        sensor_data_new = np.array([distance, angle])
+
+        # Save a window of samples, preprocess, and filter them
+        self.n_cycles += 1
+        if self.n_cycles == 1:
+            self.sensor_data_preproc = np.reshape(sensor_data_new,(N_SENSOR_DATA,1))
+            self.sensor_data_filtered = np.reshape(sensor_data_new,(N_SENSOR_DATA,1))
+            self.sensor_data_preproc = np.append(self.sensor_data_preproc,np.reshape(sensor_data_new,(N_SENSOR_DATA,1)), axis=1)
+            self.sensor_data_filtered = np.append(self.sensor_data_filtered,np.reshape(sensor_data_new,(N_SENSOR_DATA,1)), axis=1)
+
+        else:   
+            dt = time.time() - self.time_old
+            self.time_old = time.time()
+
+            if np.linalg.norm(sensor_data_new) < 1e-3:
+                if self.rejection_time < self.rejection_time_thresh:
+                    self.rejection_time += dt
+                    self.sensor_data_preproc = np.append(self.sensor_data_preproc,self.sensor_data_preproc[:,-1], axis=1)
+                else:
+                    self.sensor_data_preproc[:,-1] = np.zeros((N_SENSOR_DATA,),dtype=float)
+            else:
+                self.sensor_data_preproc[:,-1] = sensor_data_new
+
+            # Slide window
+            if self.sensor_data_preproc.shape[1] >= self.filter_win_length:
+                self.sensor_data_preproc[:,:-1] = self.sensor_data_preproc[:,1:]
+                
+            # Filter data using moving-average filter                   
+            self.moving_average_filter()
+
+        return sensor_data_new[0], sensor_data_new[1], \
+               self.sensor_data_preproc[0,-1], self.sensor_data_preproc[1,-1], \
+               self.sensor_data_filtered[0,-1], self.sensor_data_filtered[1,-1]
+
+
     def read_raw_data(self, register_name, meas_type):
         self.create_connection()
         try:
@@ -194,4 +236,4 @@ class Inxpect:
                 data[i][idx_zero] = np.mean(data[i][idx_not_zero])
             print("Measurement #" + str(i) + " after processing: " + str(data[i]), end="\n\n")
 
-        self.sensor_data_preproc[:,-self.ignore_win_length:] = data
+        self.sensor_data_preproc[:,-self.filter_win_length:] = data

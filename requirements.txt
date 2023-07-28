@@ -1,6 +1,7 @@
-numpy==1.17.4
+numpy>=1.17.4
 pymodbus>=3.4.0
 rospy>=1.15.14
 rospkg
 pyyaml
 scipy # for moving_average_filter
+ipaddress

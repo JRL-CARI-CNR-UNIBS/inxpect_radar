@@ -1,16 +1,13 @@
 import pymodbus.exceptions
 from pymodbus.client import ModbusTcpClient
 from dataclasses import dataclass, field
-from typing import Optional
 import numpy as np
-import ipaddress
 from scipy import signal
 import time
 
-REGISTER_ADDRESS = {"distance": 41014, "angle": 41015}
 N_SENSOR_DATA = 2
 MM_TO_M = 1e-3
-DEG_TO_RAD = 1 # 0.008726646259971648
+DEG_TO_RAD = 1 # 0.008726646259971648 # the angle is still expressed in deg
 
 
 @dataclass
@@ -30,9 +27,11 @@ class RadarData:
 
 @dataclass
 class Inxpect:
-    ip: str 
+    name: str
+    client: ModbusTcpClient
+    modbus_fields: dict
+
     lambda_: float = field(default=1, init=True)
-    client: ModbusTcpClient = field(default=None, init=False)
     state_obs_initialized: bool = field(default=False, init=False)
     sensor_data: np.array = field(default=None, init=False)
     sensor_data_preproc: np.array = field(default=None, init=False)
@@ -46,22 +45,9 @@ class Inxpect:
     rejection_time: float = field(default=0, init=False)
     rejection_time_thresh: float = field(default=0.5, init=True) # threshold in seconds to ignore null samples
 
-    def __post_init__(self):
-        try:
-            ipaddress.ip_address(self.ip)
-        except ValueError("Invalid IP Address"):
-            raise ValueError("Invalid IP Address")
-        self.client = ModbusTcpClient(self.ip, 502)
-
-
-    def create_connection(self):
-        try:
-            self.client.connect()
-        except Exception:
-            raise Exception(f"Unable to connect to: {self.ip}")
-
 
     def read_windowed(self):
+        print(self.name + " reading...")
         # Read raw data from MODBUS registers
         distance = self.read_raw_data("distance", "distance")
         angle = self.read_raw_data("angle", "angle")
@@ -91,8 +77,8 @@ class Inxpect:
                 # Get self.ignore_win_length latest raw samples
                 latest_data = self.sensor_data[:,-self.ignore_win_length:]
 
-                print("Latest data in window: ")
-                print(latest_data)
+                # print("Latest data in window: ")
+                # print(latest_data)
 
                 if self.human_detected(latest_data):
                     print("Person detected", end="\n")
@@ -136,6 +122,7 @@ class Inxpect:
         
 
     def read(self):
+        print(self.name + " reading...")
         # Read raw data from MODBUS registers
         distance = self.read_raw_data("distance", "distance")
         angle = self.read_raw_data("angle", "angle")
@@ -175,9 +162,8 @@ class Inxpect:
 
 
     def read_raw_data(self, register_name, meas_type):
-        self.create_connection()
         try:
-            data_raw = self.client.read_holding_registers(REGISTER_ADDRESS[register_name], 1).registers
+            data_raw = self.client.read_holding_registers(self.modbus_fields[register_name], 1).registers
         except pymodbus.exceptions.ModbusIOException as ex_msg:
             raise Exception(ex_msg)
         if len(data_raw) == 1:
@@ -213,7 +199,7 @@ class Inxpect:
 
     def human_detected(self, data):
         n_dect = self.count_detections(data)
-        print("Number of detections in window: " + str(n_dect))
+        # print("Number of detections in window: " + str(n_dect))
         return n_dect == self.ignore_win_length
     
 
@@ -231,9 +217,9 @@ class Inxpect:
             idx_zero = np.where(null_condition)[0]
             idx_not_zero = np.where(np.invert(null_condition))[0]
 
-            print("Measurement #" + str(i) + " before processing: " + str(data[i]), end="\n")
+            # print("Measurement #" + str(i) + " before processing: " + str(data[i]), end="\n")
             if len(idx_not_zero.tolist()) != 0 and len(idx_zero.tolist()) != 0:
                 data[i][idx_zero] = np.mean(data[i][idx_not_zero])
-            print("Measurement #" + str(i) + " after processing: " + str(data[i]), end="\n\n")
+            # print("Measurement #" + str(i) + " after processing: " + str(data[i]), end="\n\n")
 
         self.sensor_data_preproc[:,-self.filter_win_length:] = data

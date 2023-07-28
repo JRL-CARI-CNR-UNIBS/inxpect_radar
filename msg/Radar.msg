@@ -1,2 +1,6 @@
 float64 distance
 float64 angle
+float64 distance_preproc
+float64 angle_preproc
+float64 distance_filtered
+float64 angle_filtered
